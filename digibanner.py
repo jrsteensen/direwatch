@@ -118,7 +118,7 @@ elif displaytype == 'ili9486':
    from spidev import SpiDev
    spi = SpiDev(0,0)
    spi.mode = 0b10
-   spi.max_speed_hz = 64000000
+   spi.max_speed_hz = 48000000
    disp = ili9486.ILI9486(
        spi=spi,
        rst=25,
@@ -167,7 +167,8 @@ draw = ImageDraw.Draw(image)
 font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24)
 line_height = font.getbbox("ABCJQ")[3] - 1          # tallest callsign, with dangling J/Q tails
 font_huge = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 34 + fontbump)
-font_big = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 24 + fontbump)
+#font_big = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22 + fontbump)
+font_big = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf", 22 + fontbump)
 font_tiny = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 18 + fontbump)
 
 # Draw a black filled box to clear the image.

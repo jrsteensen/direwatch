@@ -34,25 +34,6 @@ Do not install the kernel module/framebuffer.
 GPIO pins 12 (PTT) and 16 (DCD) are monitored and light green/red icons respectively.
 Configure these gpio pins in direwolf.
 
-Installation on raspbian/bullseye for short-attentions span programmers like me:
-  sudo apt-get install python3-pip   # python >= 3.6 required
-  #sudo apt-get install gpiozero
-  sudo pip3 install adafruit-circuitpython-rgb-display
-  sudo pip3 install pyinotify
-  sudo apt-get install python3-dev python3-rpi.gpio python3-lgpio
-  vi /boot/firmware/config.txt  # uncomment following line: "dtparam=spi=on"
-  sudo pip3 install --upgrade adafruit-python-shell
-  wget https://raw.githubusercontent.com/adafruit/Raspberry-Pi-Installer-Scripts/master/raspi-blinka.py
-  sudo python3 raspi-blinka.py   ## this gets the digitalio python module
-  sudo pip install aprslib     ## so we can parse ax.25 packets
-
-Installation on raspbian/bookworm
-   sudo rm -rf /usr/lib/python3.11/EXTERNALLY-MANAGED
-   sudo pip3 install Adafruit-Blinka
-   sudo pip3 install python3-numpy
-   sudo pip3 install adafruit-circuitpython-rgb-display
-   sudo pip3 install aprslib
-
 Much code taken from ladyada for her great work driving these devices,
 
 Included ILI9486 python library taken from https://github.com/SirLefti/Python_ILI9486
@@ -75,6 +56,7 @@ import adafruit_rgb_display.ili9341 as ili9341
 import ILI9486 as ili9486
 import pyinotify
 import gpiod
+from gpiod.line import Direction, Value
 import threading
 import signal
 import os
@@ -150,7 +132,7 @@ elif displaytype == 'ili9486':
    from spidev import SpiDev
    spi = SpiDev(0,0)
    spi.mode = 0b10  
-   spi.max_speed_hz = 64000000
+   spi.max_speed_hz = 48000000
    disp = ili9486.ILI9486(
        spi=spi,
        rst=25,
@@ -193,22 +175,36 @@ else:                         # sane default
    height=240
 
 #ili9486 must be in RGB format, no Alpha channel
-image = Image.new("RGBA", (width, height))
-#image = Image.new("RGB", (width, height))
+#image = Image.new("RGBA", (width, height))
+image = Image.new("RGB", (width, height))
 draw = ImageDraw.Draw(image)
 
 # define some constants to help with graphics layout
 padding = 4 
 title_bar_height = 34
 
-if os.path.exists('/dev/gpiochip4'):
-   gpiochip = gpiod.Chip('gpiochip4')
-else:
-   gpiochip = gpiod.Chip('gpiochip0')
-blue_line = gpiochip.get_line(5)
-blue_line.request(consumer="blue", type=gpiod.LINE_REQ_DIR_OUT)
-red_line = gpiochip.get_line(26)
-red_line.request(consumer="red", type=gpiod.LINE_REQ_DIR_OUT)
+chipdev = '/dev/gpiochip0'
+
+#setup Blue LED
+LINE = 5
+blue_line = gpiod.request_lines( "/dev/gpiochip0", consumer="blue",
+    config={
+        LINE: gpiod.LineSettings(
+            direction=Direction.OUTPUT, output_value=Value.INACTIVE
+        )
+    }
+)
+
+#setup Red LED
+LINE = 26
+red_line = gpiod.request_lines( "/dev/gpiochip0", consumer="blue",
+    config={
+        LINE: gpiod.LineSettings(
+            direction=Direction.OUTPUT, output_value=Value.INACTIVE
+        )
+    }
+)
+
 
 def get_direction(origin, destination):
    lat1, lon1 = origin 
@@ -262,7 +258,8 @@ def bluetooth_connection_poll_thread():  #FIXME convert to libgpiod, not gpiozer
             if bt_status == 0:
                 bt_status = 1
                 bticon = Image.open('bt.small.on.png')   
-                blue_line.set_value(1) 
+                #blue_line.set_value(1) 
+                blue_line.set_value(5, Value.ACTIVE)
                 image.paste(bticon, (width - title_bar_height * 3 + 12  , padding + 2 ), bticon)
                 with display_lock:
                     disp.image(image)
@@ -270,7 +267,8 @@ def bluetooth_connection_poll_thread():  #FIXME convert to libgpiod, not gpiozer
             if bt_status == 1:
                 bt_status = 0  
                 bticon = Image.open('bt.small.off.png')   
-                blue_line.set_value(0) 
+                #blue_line.set_value(0) 
+                blue_line.set_value(5, Value.INACTIVE)
                 image.paste(bticon, (width - title_bar_height * 3 + 12  , padding + 2 ), bticon)
                 with display_lock:
                     disp.image(image)
@@ -287,17 +285,19 @@ def redgreen_thread():                      ## change red or green status indica
       if search is not None:
          status = search.group(1)
          if status == 'DCD 0 = 1':
-            draw.ellipse(( width - title_bar_height     , padding,    width - padding * 2,                     title_bar_height - padding), fill=(0,200,0,255))
+            draw.ellipse(( width - title_bar_height     , padding,    width - padding * 2,                     title_bar_height - padding), fill=(0,230,0,255))
          elif status == 'DCD 0 = 0':
             draw.ellipse(( width - title_bar_height     , padding,    width - padding * 2,                     title_bar_height - padding), fill=(0,80,0,255))
          elif status == 'PTT 0 = 1':
-            draw.ellipse(( width - title_bar_height * 2 , padding,    width - title_bar_height - padding * 2 , title_bar_height - padding), fill=(200,0,0,255))
+            draw.ellipse(( width - title_bar_height * 2 , padding,    width - title_bar_height - padding * 2 , title_bar_height - padding), fill=(230,0,0,255))
             #red_led.on()
-            red_line.set_value(1)
+            #red_line.set_value(1)
+            red_line.set_value(26, Value.ACTIVE)
          elif status == 'PTT 0 = 0':
             draw.ellipse(( width - title_bar_height * 2 , padding,    width - title_bar_height - padding * 2 , title_bar_height - padding), fill=(80,0,0,255))
             #red_led.off()
-            red_line.set_value(0)
+            #red_line.set_value(0)
+            red_line.set_value(26, Value.INACTIVE)
          else:
             print("Unknown DCD/PTT event\n")
          with display_lock:
@@ -371,7 +371,7 @@ draw.ellipse(( width - title_bar_height * 2           , padding,    width - titl
 
 with display_lock:
     disp.image(image)
-    if savefile: image.save(savefile, compress_level=0) 
+    if savefile: image.save(savefile, compress_level=1) 
 
 # fire up green/red led threads
 #watch_threadG.start()
@@ -403,7 +403,7 @@ def single_loop():
 
       if search is not None:
          packetstring = search.group(1)
-         packetstring = packetstring.replace('<0x0d>','\x0d').replace('<0x1c>','\x1c').replace('<0x1e>','\x1e').replace('<0x1f>','\0x1f').replace('<0x0a>','\0x0a')
+         packetstring = packetstring.replace('<0x0d>','\x0d').replace('<0x1c>','\x1c').replace('<0x1e>','\x1e').replace('<0x1f>','\0x1f').replace('<0x0a>','\0x0a').replace('<0x20>','\0x20') 
       else:
          continue
   
@@ -484,7 +484,7 @@ def single_loop():
   
       with display_lock:
           disp.image(image)
-          if savefile: image.save(savefile, compress_level=0) 
+          if savefile: image.save(savefile, compress_level=1) 
 
       time.sleep(1)
 
@@ -583,7 +583,7 @@ def list_loop():
        line_count += 1
        with display_lock:
            disp.image(image)
-           if savefile: image.save(savefile, compress_level=0) 
+           if savefile: image.save(savefile, compress_level=1) 
 
 if __name__ == '__main__':
    if args["one"]:

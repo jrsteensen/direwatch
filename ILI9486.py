@@ -23,6 +23,7 @@ import time
 import numpy as np
 from PIL import Image, ImageDraw
 import gpiod
+from gpiod.line import Direction, Value
 from spidev import SpiDev
 
 # constants
@@ -113,14 +114,7 @@ class ILI9486:
         self.__inverted = False
         self.__idle = False
 
-        chip = gpiod.Chip('gpiochip4')
-        self.__dc_line = chip.get_line(self.__dc)
-        self.__dc_line.request(consumer='dc', type=gpiod.LINE_REQ_DIR_OUT)
-        self.__dc_line.set_value(1)
-
-        if self.__rst is not None:
-            self.__rst_line = chip.get_line(self.__rst)
-            self.__rst_line.request(consumer='rst', type=gpiod.LINE_REQ_DIR_OUT)
+        self.__gpiod_path = '/dev/gpiochip0'
 
         # swap width and height if selected origin is landscape mode by checking if third bit is 1
         if self.__origin.value & 0x20:
@@ -138,14 +132,22 @@ class ILI9486:
     def send(self, data, is_data=True, chunk_size=4096):
         """Writes a byte or an array of bytes to the display."""
         # dc low for command, high for data
-        self.__dc_line.set_value(is_data)
-        if isinstance(data, int):
-            self.__spi.writebytes([data])
-        else:
-            for start in range(0, len(data), chunk_size):
-                end = min(start + chunk_size, len(data))
-                self.__spi.writebytes(data[start: end])
-        return self
+        with gpiod.request_lines(
+            self.__gpiod_path,
+            consumer='ili9486-send',
+            config={
+                self.__dc: gpiod.LineSettings(
+                    direction=Direction.OUTPUT, output_value=Value.ACTIVE if is_data else Value.INACTIVE
+                )
+            }
+        ) as request:
+            if isinstance(data, int):
+                self.__spi.writebytes([data])
+            else:
+                for start in range(0, len(data), chunk_size):
+                    end = min(start + chunk_size, len(data))
+                    self.__spi.writebytes(data[start: end])
+            return self
 
     def command(self, data):
         """Writes a byte or an array of bytes to the display as a command."""
@@ -158,14 +160,23 @@ class ILI9486:
     def reset(self):
         """Resets the display if a reset pin is provided."""
         if self.__rst is not None:
-            self.__rst_line.set_value(1)
-            time.sleep(.001)  # wait a bit to make sure the output was HIGH
-            self.__rst_line.set_value(0)
-            time.sleep(.000100)  # wait 100 µs to trigger the reset (should be 10 µs, but the OS is not precise enough)
-            self.__rst_line.set_value(1)
-            time.sleep(.120)  # wait 120 ms for finishing blanking and resetting
-            self.__inverted = False
-            self.__idle = False
+            with gpiod.request_lines(
+                self.__gpiod_path,
+                consumer='ili9486-reset',
+                config={
+                    self.__rst: gpiod.LineSettings(
+                        direction=Direction.OUTPUT, output_value=Value.ACTIVE
+                    )
+                }
+            ) as request:
+                request.set_value(self.__rst, Value.ACTIVE)
+                time.sleep(.001)  # wait a bit to make sure the output was HIGH
+                request.set_value(self.__rst, Value.INACTIVE)
+                time.sleep(.000100)  # wait 100 µs to trigger the reset (should be 10 µs, but the OS is not precise enough)
+                request.set_value(self.__rst, Value.ACTIVE)
+                time.sleep(.120)  # wait 120 ms for finishing blanking and resetting
+                self.__inverted = False
+                self.__idle = False
         return self
 
     def _init_sequence(self):
