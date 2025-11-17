@@ -34,9 +34,11 @@ This will tail a direwolf log file and display callsigns on a small tft display:
 
 -  https://www.adafruit.com/product/4484   (st7789)
 -  https://www.adafruit.com/product/2423   (ili9341) 
--  https://www.amazon.com/Resistive-Screen-IPS-Resolution-Controller/dp/B07V9WW96D  (ili9486)
+-  https://www.amazon.com/dp/B07V9WW96D  (ili9486) (WaveShare (B))
 
 Three screens are supported st7789 240x240, ili9341 240x360, ili9486 320x480
+
+Other ILI9486 screens have horrible viewing angles, get the Waveshare SpotPear Rev2.0 (B) above.
 
 Default configuration is for the 240x240 st7789 screen.  
 
@@ -68,7 +70,7 @@ Installation on Raspberry Pi OS Bookworm, including optional rtl-sdr receiver:
 ```
 sudo apt-get update
 sudo apt-get install direwolf rtl-sdr git python3-pip fonts-dejavu python3-pil python3-pyinotify python3-numpy python3-libgpiod python3-lgpio
-sudo pip3  install --break-system-packages adafruit-circuitpython-rgb-display
+sudo pip3  install --break-system-packages adafruit-circuitpython-rgb-display Adafruit-Blinka
 sudo pip3  install --break-system-packages aprslib
 
 git clone https://github.com/craigerl/direwatch.git
